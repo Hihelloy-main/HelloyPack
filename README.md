@@ -19,7 +19,7 @@ A ProjectKorra ability addon pack by **Hihelloy** — 27 custom abilities spanni
 ## Installation
 
 1. Build with `mvn package` — the shaded jar will appear as `HelloyPack.jar` in `target/`.
-2. Drop `HelloyPack.jar` into your server's `plugins/` folder alongside `ProjectKorra.jar`.
+2. Drop `HelloyPack.jar` into your server's `plugins/ProjectKorra/abilities` folder alongside other addon abilities.
 3. Restart the server. Abilities register automatically — no `plugin.yml` needed (this is an addon pack, not a plugin).
 4. Assign abilities to players with `/b b <AbilityName>` as usual.
 
