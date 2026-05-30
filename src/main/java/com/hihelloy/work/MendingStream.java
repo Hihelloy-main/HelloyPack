@@ -1,0 +1,256 @@
+package com.hihelloy.work;
+
+import com.projectkorra.projectkorra.GeneralMethods;
+import com.projectkorra.projectkorra.ProjectKorra;
+import com.projectkorra.projectkorra.ability.AddonAbility;
+import com.projectkorra.projectkorra.ability.HealingAbility;
+import com.projectkorra.projectkorra.configuration.ConfigManager;
+import com.hihelloy.work.lib.verlet.VerletHandler;
+import com.hihelloy.work.lib.verlet.VerletRope;
+import org.bukkit.*;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.*;
+import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
+import org.bukkit.util.Vector;
+
+public class MendingStream extends HealingAbility implements AddonAbility {
+
+    public Listener abilityListener;
+
+    private long cooldown;
+    private double healPerTick;
+    private long healTickInterval;
+    private double selectRange;
+    private long maxDuration;
+    private long maxLifetime;
+
+    private enum StreamState {
+        SELECTING,
+        CHANNELING,
+        DONE
+    }
+    private StreamState state;
+
+    private LivingEntity healTarget;
+    private VerletHandler vh;
+    private VerletRope streamRope;
+    private long channelStartTime;
+    private long lastHealTick;
+
+    public MendingStream(Player player) {
+        super(player);
+        if (!bPlayer.canBend(this)) return;
+        setFields();
+        start();
+    }
+
+    private void setFields() {
+        FileConfiguration config = ConfigManager.getConfig();
+        this.cooldown = config.getLong("ExtraAbilities.Hihelloy.Healing.MendingStream.Cooldown", 8000);
+        this.healPerTick = config.getDouble("ExtraAbilities.Hihelloy.Healing.MendingStream.HealPerTick", 1.0);
+        this.healTickInterval = config.getLong("ExtraAbilities.Hihelloy.Healing.MendingStream.HealTickInterval", 600);
+        this.selectRange = config.getDouble("ExtraAbilities.Hihelloy.Healing.MendingStream.SelectRange", 12.0);
+        this.maxDuration = config.getLong("ExtraAbilities.Hihelloy.Healing.MendingStream.MaxDuration", 6000);
+        this.maxLifetime = config.getLong("ExtraAbilities.Hihelloy.Healing.MendingStream.MaxLifetime", 10000);
+
+        this.state = StreamState.SELECTING;
+        this.lastHealTick = 0;
+    }
+
+    @Override
+    public void progress() {
+        if (System.currentTimeMillis() > getStartTime() + maxLifetime) {
+            remove();
+            return;
+        }
+
+        if (state == StreamState.SELECTING) {
+            spawnSelectIndicator();
+
+        } else if (state == StreamState.CHANNELING) {
+            if (healTarget == null || healTarget.isDead()) {
+                remove();
+                return;
+            }
+            if (!healTarget.getWorld().equals(player.getWorld())) {
+                remove();
+                return;
+            }
+            if (System.currentTimeMillis() > channelStartTime + maxDuration) {
+                state = StreamState.DONE;
+                remove();
+                return;
+            }
+            if (!player.isSneaking()) {
+                remove();
+                return;
+            }
+
+            Location handLoc = GeneralMethods.getMainHandLocation(player);
+            Location targetLoc = healTarget.getLocation().add(0, 1.2, 0);
+
+            streamRope.moveStartPoint(handLoc);
+            streamRope.moveEndPoint(targetLoc);
+
+            double dist = handLoc.distance(targetLoc);
+            if (dist > selectRange) {
+                remove();
+                return;
+            }
+
+            vh.update();
+            vh.display();
+
+            long now = System.currentTimeMillis();
+            if (now - lastHealTick >= healTickInterval) {
+                lastHealTick = now;
+                double maxHealth = healTarget.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH).getValue();
+                healTarget.setHealth(Math.min(healTarget.getHealth() + healPerTick, maxHealth));
+                player.getWorld().spawnParticle(Particle.HEART,
+                        healTarget.getLocation().add(0, 2.2, 0), 3, 0.2, 0.1, 0.2, 0);
+                player.getWorld().playSound(healTarget.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.4f, 1.8f);
+            }
+
+            spawnStreamParticles(handLoc, targetLoc);
+        }
+    }
+
+    public void onSneak() {
+        if (state == StreamState.SELECTING) {
+            LivingEntity aimed = findHealTarget();
+            if (aimed != null) {
+                healTarget = aimed;
+                beginChannel();
+            }
+        }
+    }
+
+    public void onSneakRelease() {
+        if (state == StreamState.CHANNELING) {
+            remove();
+        }
+    }
+
+    private void beginChannel() {
+        state = StreamState.CHANNELING;
+        channelStartTime = System.currentTimeMillis();
+        lastHealTick = System.currentTimeMillis();
+
+        Location handLoc = GeneralMethods.getMainHandLocation(player);
+        this.vh = new VerletHandler(player);
+        int nodes = 20;
+        double ropeLen = handLoc.distance(healTarget.getLocation().add(0, 1.2, 0)) + 1;
+        Vector maxScale = new Vector(0.07, ropeLen / nodes, 0.07);
+        Vector minScale = new Vector(0.04, ropeLen / nodes, 0.04);
+        this.streamRope = new VerletRope(vh, player, handLoc, ropeLen, nodes, 1,
+                Color.fromRGB(0, 200, 120), 1.0f, true, true, maxScale, minScale, Material.PRISMARINE_SLAB);
+        this.vh.setGravity(new Vector(0, -0.02, 0));
+        player.getWorld().playSound(handLoc, Sound.ENTITY_ELDER_GUARDIAN_AMBIENT, 0.6f, 1.8f);
+    }
+
+    private LivingEntity findHealTarget() {
+        for (Entity e : GeneralMethods.getEntitiesAroundPoint(player.getEyeLocation(), selectRange)) {
+            if (!(e instanceof LivingEntity)) continue;
+            Vector toTarget = e.getLocation().add(0, 1, 0).toVector().subtract(player.getEyeLocation().toVector());
+            double dot = toTarget.normalize().dot(player.getLocation().getDirection().normalize());
+            if (dot > 0.92 && e.getLocation().distance(player.getLocation()) <= selectRange) {
+                return (LivingEntity) e;
+            }
+        }
+        return null;
+    }
+
+    private void spawnSelectIndicator() {
+        LivingEntity aimed = findHealTarget();
+        if (aimed == null) return;
+        Location loc = aimed.getLocation().add(0, 2.3, 0);
+        player.getWorld().spawnParticle(Particle.DUST, loc, 3, 0.15, 0.05, 0.15,
+                0, new Particle.DustOptions(Color.fromRGB(0, 230, 130), 0.8f));
+    }
+
+    private void spawnStreamParticles(Location from, Location to) {
+        if (Math.random() > 0.4) return;
+        Vector dir = to.toVector().subtract(from.toVector()).normalize();
+        double dist = from.distance(to);
+        double t = Math.random() * dist;
+        Location p = from.clone().add(dir.multiply(t));
+        p.add(new Vector((Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2));
+        player.getWorld().spawnParticle(Particle.DUST, p, 1, 0, 0, 0,
+                0, new Particle.DustOptions(Color.fromRGB(0, 210, 140), 0.7f));
+    }
+
+    @Override
+    public boolean isSneakAbility() {
+        return true;
+    }
+
+    @Override
+    public boolean isHarmlessAbility() {
+        return true;
+    }
+
+    @Override
+    public long getCooldown() {
+        return cooldown;
+    }
+
+    @Override
+    public Location getLocation() {
+        return healTarget != null ? healTarget.getLocation() : player.getLocation();
+    }
+
+    @Override
+    public String getName() {
+        return "MendingStream";
+    }
+
+    @Override
+    public String getAuthor() {
+        return "Hihelloy";
+    }
+
+    @Override
+    public String getVersion() {
+        return "1.0";
+    }
+
+    @Override
+    public String getDescription() {
+        return "Channel a glowing stream of healing water toward an ally, restoring their health over time.";
+    }
+
+    @Override
+    public String getInstructions() {
+        return "\nHold Sneak: Aim at an ally and channel a healing stream.\nRelease Sneak: Stop.";
+    }
+
+    @Override
+    public void remove() {
+        if (bPlayer == null) return;
+        bPlayer.addCooldown(this, cooldown);
+        super.remove();
+        if (streamRope != null) streamRope.destroy();
+    }
+
+    @Override
+    public void load() {
+        abilityListener = new MendingStreamListener();
+        ProjectKorra.plugin.getServer().getPluginManager().registerEvents(abilityListener, ProjectKorra.plugin);
+        ConfigManager.getConfig().addDefault("ExtraAbilities.Hihelloy.Healing.MendingStream.Cooldown", 8000L);
+        ConfigManager.getConfig().addDefault("ExtraAbilities.Hihelloy.Healing.MendingStream.HealPerTick", 1.0);
+        ConfigManager.getConfig().addDefault("ExtraAbilities.Hihelloy.Healing.MendingStream.HealTickInterval", 600L);
+        ConfigManager.getConfig().addDefault("ExtraAbilities.Hihelloy.Healing.MendingStream.SelectRange", 12.0);
+        ConfigManager.getConfig().addDefault("ExtraAbilities.Hihelloy.Healing.MendingStream.MaxDuration", 6000L);
+        ConfigManager.getConfig().addDefault("ExtraAbilities.Hihelloy.Healing.MendingStream.MaxLifetime", 10000L);
+        ConfigManager.defaultConfig.save();
+        ProjectKorra.log.info("Succesfully enabled " + getName() + " by " + getAuthor());
+    }
+
+    @Override
+    public void stop() {
+        HandlerList.unregisterAll(abilityListener);
+        remove();
+        ProjectKorra.log.info("Successfully disabled " + getName() + " by " + getAuthor());
+    }
+}
