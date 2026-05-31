@@ -201,6 +201,10 @@ public class VoidPortal extends AvatarAbility implements AddonAbility {
         }
     }
 
+    public boolean isShielding() {
+        return mode == PortalMode.SHIELD;
+    }
+
     public void onLeftClick() {
         if (mode == PortalMode.HOLDING) {
             beginThrow();

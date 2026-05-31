@@ -63,7 +63,7 @@ public class BloodSnare extends BloodAbility implements AddonAbility {
         this.lastSnareTick = 0;
         this.lastParticleTick = 0;
 
-        new MovementHandler(target, this).stopWithDuration(maxSnareDuration, "BloodSnare");
+        new MovementHandler(target, this).stopWithDuration(maxSnareDuration, getElement().getColor() + "*BloodSnare*");
         player.getWorld().playSound(target.getLocation(), Sound.ENTITY_ELDER_GUARDIAN_CURSE, 0.8f, 0.7f);
         player.getWorld().spawnParticle(Particle.DUST,
                 target.getLocation().add(0, 1, 0), 20, 0.3, 0.5, 0.3,
@@ -94,7 +94,15 @@ public class BloodSnare extends BloodAbility implements AddonAbility {
         long now = System.currentTimeMillis();
         if (now - lastSnareTick >= snareTickInterval) {
             lastSnareTick = now;
+            double healthBefore = target.getHealth();
             DamageHandler.damageEntity(target, snareDamagePerTick, this);
+            double actualDamage = Math.max(0, healthBefore - target.getHealth());
+            if (actualDamage > 0) {
+                double maxHealth = player.getMaxHealth();
+                player.setHealth(Math.min(player.getHealth() + actualDamage, maxHealth));
+                player.getWorld().spawnParticle(Particle.HEART,
+                        player.getLocation().add(0, 2.2, 0), 2, 0.2, 0.1, 0.2, 0);
+            }
             player.getWorld().playSound(target.getLocation(), Sound.ENTITY_PLAYER_HURT, 0.8f, 0.6f);
         }
 

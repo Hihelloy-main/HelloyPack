@@ -4,7 +4,9 @@ import com.projectkorra.projectkorra.BendingPlayer;
 import com.projectkorra.projectkorra.ability.CoreAbility;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerAnimationEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
 
@@ -51,6 +53,16 @@ public class VoidPortalListener implements Listener {
         } else {
             lastSneakTime.put(uid, now);
             ability.onSneak();
+        }
+    }
+
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = false)
+    public void onDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+        if (!CoreAbility.hasAbility(player, VoidPortal.class)) return;
+        VoidPortal ability = CoreAbility.getAbility(player, VoidPortal.class);
+        if (ability.isShielding()) {
+            event.setCancelled(true);
         }
     }
 }

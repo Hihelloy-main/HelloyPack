@@ -103,7 +103,7 @@ public class ThornWhip extends PlantAbility implements AddonAbility {
                 if (e instanceof LivingEntity && !e.getUniqueId().equals(player.getUniqueId())) {
                     entangledTarget = (LivingEntity) e;
                     DamageHandler.damageEntity(entangledTarget, damage, this);
-                    new MovementHandler(entangledTarget, this).stopWithDuration(entangleDuration, "ThornWhip");
+                    new MovementHandler(entangledTarget, this).stopWithDuration(entangleDuration, getElement().getColor() + "*ThornWhip*");
                     state = WhipState.ENTANGLED;
                     entangleStartTime = System.currentTimeMillis();
                     player.getWorld().playSound(tipLoc, Sound.ENTITY_PLAYER_ATTACK_CRIT, 1.5f, 0.7f);

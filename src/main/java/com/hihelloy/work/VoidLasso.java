@@ -187,7 +187,7 @@ public class VoidLasso extends ChiAbility implements AddonAbility {
     private void beginPin() {
         state = LassoState.PINNED;
         pinStartTime = System.currentTimeMillis();
-        new MovementHandler(pinnedTarget, this).stopWithDuration(pinDuration, "VoidLasso");
+        new MovementHandler(pinnedTarget, this).stopWithDuration(pinDuration, getElement().getColor() + "*VoidLasso*");
         player.getWorld().playSound(loopTip, Sound.ENTITY_PLAYER_ATTACK_NODAMAGE, 1.0f, 0.5f);
     }
 

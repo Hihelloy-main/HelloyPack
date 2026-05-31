@@ -6,6 +6,7 @@ import com.projectkorra.projectkorra.ability.AddonAbility;
 import com.projectkorra.projectkorra.ability.IceAbility;
 import com.projectkorra.projectkorra.configuration.ConfigManager;
 import com.projectkorra.projectkorra.util.DamageHandler;
+import com.projectkorra.projectkorra.util.MovementHandler;
 import com.hihelloy.work.lib.GameObject;
 import com.hihelloy.work.lib.Transition;
 import org.bukkit.*;
@@ -13,8 +14,6 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.*;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
@@ -44,7 +43,7 @@ public class FrostCage extends IceAbility implements AddonAbility {
     private Transition shatterTransition;
     private long activeStart;
     private long lastDamageTick;
-    private Set<Entity> trapped = new HashSet<>();
+    private Set<LivingEntity> trapped = new HashSet<>();
 
     public FrostCage(Player player) {
         super(player);
@@ -154,16 +153,17 @@ public class FrostCage extends IceAbility implements AddonAbility {
         if (now - lastDamageTick < 1000) return;
         lastDamageTick = now;
 
-        trapped.clear();
         for (Entity e : GeneralMethods.getEntitiesAroundPoint(cageCenter.clone().add(0, spireHeight * 0.5, 0), cageRadius)) {
-            if (!(e instanceof LivingEntity)) continue;
+            if (!(e instanceof LivingEntity le)) continue;
             if (e.getUniqueId().equals(player.getUniqueId())) continue;
             double dx = e.getLocation().getX() - cageCenter.getX();
             double dz = e.getLocation().getZ() - cageCenter.getZ();
             if (Math.sqrt(dx * dx + dz * dz) <= cageRadius) {
-                trapped.add(e);
-                DamageHandler.damageEntity((LivingEntity) e, tickDamage, this);
-                ((LivingEntity) e).addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 25, 2, true, false));
+                trapped.add(le);
+                DamageHandler.damageEntity(le, tickDamage, this);
+                if (MovementHandler.getFromEntityAndAbility(le, this) == null) {
+                    new MovementHandler(le, this).stopWithDuration(duration, getElement().getColor() + "*FrostCage*");
+                }
                 player.getWorld().playSound(e.getLocation(), Sound.ENTITY_PLAYER_HURT, 0.5f, 1.5f);
             }
         }
@@ -244,6 +244,10 @@ public class FrostCage extends IceAbility implements AddonAbility {
         if (bPlayer == null) return;
         bPlayer.addCooldown(this, cooldown);
         super.remove();
+        for (LivingEntity le : trapped) {
+            MovementHandler handler = MovementHandler.getFromEntityAndAbility(le, this);
+            if (handler != null) handler.reset();
+        }
         for (SpireColumn spire : spires) spire.destroy();
     }
 

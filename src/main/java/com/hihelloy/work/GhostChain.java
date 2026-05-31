@@ -173,7 +173,7 @@ public class GhostChain extends ChiAbility implements AddonAbility {
                 state = ChainState.BOUND;
                 bindStartTime = System.currentTimeMillis();
                 DamageHandler.damageEntity(boundTarget, damage, this);
-                new MovementHandler(boundTarget, this).stopWithDuration(bindDuration, "GhostChain");
+                new MovementHandler(boundTarget, this).stopWithDuration(bindDuration, getElement().getColor() + "*GhostChain*");
                 player.getWorld().playSound(hookLocation, Sound.ENTITY_PLAYER_ATTACK_CRIT, 2.0f, 0.7f);
                 player.getWorld().playSound(hookLocation, Sound.BLOCK_IRON_TRAPDOOR_CLOSE, 1.5f, 0.6f);
                 player.getWorld().spawnParticle(Particle.CRIT, hookLocation, 10, 0.2, 0.2, 0.2, 0.1);
